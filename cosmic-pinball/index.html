@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Nebula: Cosmic Pinball</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+            font-family: 'Orbitron', sans-serif;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            border: 2px solid #fff;
+            box-shadow: 0 0 20px #0ff;
+        }
+        #gameInfo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            font-size: 18px;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="gameInfo">
+        <div>Level: <span id="level">1</span></div>
+        <div>Score: <span id="score">0</span></div>
+        <div>Lives: <span id="lives">3</span></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const levelElement = document.getElementById('level');
+        const scoreElement = document.getElementById('score');
+        const livesElement = document.getElementById('lives');
+
+        // Game state
+        let level = 1;
+        let score = 0;
+        let lives = 3;
+        let gameLoop;
+        let leftPressed = false;
+        let rightPressed = false;
+
+        // Game objects
+        const ball = {
+            x: 400,
+            y: 300,
+            radius: 8,
+            dx: 0,
+            dy: 0,
+            baseSpeed: 5,
+            color: '#00ff00'
+        };
+
+        const paddle = {
+            width: 100,
+            height: 10,
+            x: 350,
+            y: 550,
+            speed: 8,
+            color: '#ff00ff'
+        };
+
+        let obstacles = [];
+        let particles = [];
+
+        // Event listeners
+        document.addEventListener('keydown', keyDownHandler);
+        document.addEventListener('keyup', keyUpHandler);
+
+        function keyDownHandler(e) {
+            if (e.key === 'ArrowLeft') leftPressed = true;
+            if (e.key === 'ArrowRight') rightPressed = true;
+            if (e.key === ' ' && !gameLoop) startGame();
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === 'ArrowLeft') leftPressed = false;
+            if (e.key === 'ArrowRight') rightPressed = false;
+        }
+
+        function startGame() {
+            resetBall();
+            level = 1;
+            score = 0;
+            lives = 3;
+            createObstacles();
+            updateInfoDisplay();
+            gameLoop = setInterval(update, 1000 / 60); // 60 FPS
+        }
+
+        function resetBall() {
+            ball.x = 400;
+            ball.y = 300;
+            ball.dx = (Math.random() > 0.5 ? 1 : -1) * ball.baseSpeed;
+            ball.dy = -ball.baseSpeed;
+        }
+
+        function createObstacles() {
+            obstacles = [];
+            const numObstacles = 5 + level * 2;
+            for (let i = 0; i < numObstacles; i++) {
+                obstacles.push({
+                    x: Math.random() * (canvas.width - 80) + 40,
+                    y: Math.random() * (canvas.height - 200) + 50,
+                    radius: Math.random() * 10 + 20,
+                    color: `hsl(${Math.random() * 360}, 100%, 50%)`
+                });
+            }
+        }
+
+        function update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+            
+            // Move paddle
+            if (leftPressed && paddle.x > 0) paddle.x -= paddle.speed;
+            if (rightPressed && paddle.x < canvas.width - paddle.width) paddle.x += paddle.speed;
+
+            // Move ball
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            // Ball collision with walls
+            if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) ball.dx = -ball.dx;
+            if (ball.y - ball.radius < 0) ball.dy = -ball.dy;
+
+            // Ball collision with paddle
+            if (ball.y + ball.radius > paddle.y && 
+                ball.x > paddle.x && 
+                ball.x < paddle.x + paddle.width) {
+                ball.dy = -ball.dy;
+                const paddleCenter = paddle.x + paddle.width / 2;
+                ball.dx = (ball.x - paddleCenter) / (paddle.width / 2) * ball.baseSpeed;
+                createParticles(ball.x, ball.y, '#00ffff');
+                score += 10;
+            }
+
+            // Ball collision with obstacles
+            obstacles.forEach((obstacle, index) => {
+                const dx = ball.x - obstacle.x;
+                const dy = ball.y - obstacle.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < ball.radius + obstacle.radius) {
+                    ball.dx = -ball.dx;
+                    ball.dy = -ball.dy;
+                    createParticles(ball.x, ball.y, obstacle.color);
+                    obstacles.splice(index, 1);
+                    score += 50;
+
+                    if (obstacles.length === 0) {
+                        levelUp();
+                    }
+                }
+            });
+
+            // Game over condition
+            if (ball.y + ball.radius > canvas.height) {
+                lives--;
+                if (lives > 0) {
+                    resetBall();
+                } else {
+                    clearInterval(gameLoop);
+                    gameLoop = null;
+                    drawGameOver();
+                }
+            }
+
+            // Draw game objects
+            drawBall();
+            drawPaddle();
+            drawObstacles();
+            updateParticles();
+
+            // Update score
+            updateInfoDisplay();
+        }
+
+        function drawBackground() {
+            const gradient = ctx.createRadialGradient(400, 300, 0, 400, 300, 600);
+            gradient.addColorStop(0, "#000033");
+            gradient.addColorStop(1, "#000011");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw stars
+            ctx.fillStyle = "#ffffff";
+            for (let i = 0; i < 100; i++) {
+                ctx.beginPath();
+                ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            const gradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, ball.radius);
+            gradient.addColorStop(0, "#ffffff");
+            gradient.addColorStop(1, ball.color);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawPaddle() {
+            const gradient = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.height);
+            gradient.addColorStop(0, "#ff00ff");
+            gradient.addColorStop(1, "#ff66ff");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+        }
+
+        function drawObstacles() {
+            obstacles.forEach(obstacle => {
+                ctx.beginPath();
+                ctx.arc(obstacle.x, obstacle.y, obstacle.radius, 0, Math.PI * 2);
+                const gradient = ctx.createRadialGradient(obstacle.x, obstacle.y, 0, obstacle.x, obstacle.y, obstacle.radius);
+                gradient.addColorStop(0, "#ffffff");
+                gradient.addColorStop(1, obstacle.color);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                ctx.closePath();
+            });
+        }
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    radius: Math.random() * 3 + 1,
+                    color: color,
+                    dx: (Math.random() - 0.5) * 4,
+                    dy: (Math.random() - 0.5) * 4,
+                    life: 30
+                });
+            }
+        }
+
+        function updateParticles() {
+            particles.forEach((particle, index) => {
+                particle.x += particle.dx;
+                particle.y += particle.dy;
+                particle.life--;
+
+                if (particle.life <= 0) {
+                    particles.splice(index, 1);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = particle.color;
+                    ctx.fill();
+                    ctx.closePath();
+                }
+            });
+        }
+
+        function levelUp() {
+            level++;
+            ball.baseSpeed += 0.5;
+            resetBall();
+            createObstacles();
+        }
+
+        function updateInfoDisplay() {
+            levelElement.textContent = level;
+            scoreElement.textContent = score;
+            livesElement.textContent = lives;
+        }
+
+        function drawGameOver() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#fff';
+            ctx.font = '40px Orbitron';
+            ctx.fillText('Game Over!', 280, 250);
+            ctx.font = '24px Orbitron';
+            ctx.fillText(`Final Score: ${score}`, 310, 300);
+            ctx.fillText('Press Space to Restart', 260, 350);
+        }
+
+        // Initial game state
+        drawBackground();
+        ctx.fillStyle = '#fff';
+        ctx.font = '40px Orbitron';
+        ctx.fillText('Neon Nebula: Cosmic Pinball', 120, 250);
+        ctx.font = '24px Orbitron';
+        ctx.fillText('Press Space to Start', 280, 300);
+    </script>
+</body>
+</html>

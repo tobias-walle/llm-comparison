@@ -2,8 +2,8 @@
 
 Just a small test to compare LLMs
 
-- [GPT-4o]()
-- [Claude Sonnet 3.5]()
+- [GPT-4o](https://tobias-walle.github.io/llm-comparison/gpt-4o.html) ([Source](./gpt-4o.html))
+- [Claude Sonnet 3.5](https://tobias-walle.github.io/llm-comparison/claude-3.5-sonnet.html) ([Source](./claude-3.5-sonnet.html))
 
 Prompt:
 

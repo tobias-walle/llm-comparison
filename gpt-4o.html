@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            filter: drop-shadow(2px 2px 2px #000);
+        }
+        #menu, #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        #leaderboard {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="menu">
+        <h1>Snake Game</h1>
+        <button onclick="startGame()">Start Game</button>
+    </div>
+    <div id="game-over" class="hidden">
+        <h1>Game Over!</h1>
+        <p>Your Score: <span id="final-score"></span></p>
+        <input type="text" id="player-name" placeholder="Enter your name">
+        <button onclick="submitScore()">Submit Score</button>
+    </div>
+    <div id="leaderboard">
+        <h2>Leaderboard</h2>
+        <ul id="leaderboard-list"></ul>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const menu = document.getElementById('menu');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScoreEl = document.getElementById('final-score');
+        const leaderboardList = document.getElementById('leaderboard-list');
+        let leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
+        let snake, food, obstacles, score, interval, foodInterval, obstacleInterval;
+
+        function startGame() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            menu.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            snake = [{x: 200, y: 200}];
+            food = [];
+            obstacles = [];
+            score = 0;
+            clearInterval(interval);
+            clearInterval(foodInterval);
+            clearInterval(obstacleInterval);
+            interval = setInterval(updateGame, 100);
+            foodInterval = setInterval(addFood, 1000);
+            obstacleInterval = setInterval(addObstacle, 3000);
+            document.addEventListener('keydown', changeDirection);
+        }
+
+        function updateGame() {
+            const head = {...snake[0]};
+            const direction = snake.direction;
+            if (direction === 'ArrowUp') head.y -= 20;
+            if (direction === 'ArrowDown') head.y += 20;
+            if (direction === 'ArrowLeft') head.x -= 20;
+            if (direction === 'ArrowRight') head.x += 20;
+
+            // Check collisions
+            if (head.x < 0 || head.y < 0 || head.x >= canvas.width || head.y >= canvas.height || snake.some(segment => segment.x === head.x && segment.y === head.y) || obstacles.some(obstacle => obstacle.x === head.x && obstacle.y === head.y)) {
+                endGame();
+                return;
+            }
+
+            snake.unshift(head);
+
+            // Check food consumption
+            const foodIndex = food.findIndex(f => f.x === head.x && f.y === head.y);
+            if (foodIndex !== -1) {
+                food.splice(foodIndex, 1);
+                score += 10;
+                clearInterval(interval);
+                interval = setInterval(updateGame, Math.max(50, 100 - score));
+            } else {
+                snake.pop();
+            }
+
+            // Draw everything
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'blue';
+            snake.forEach(segment => ctx.fillRect(segment.x, segment.y, 20, 20));
+            ctx.fillStyle = 'green';
+            food.forEach(f => ctx.fillRect(f.x, f.y, 20, 20));
+            ctx.fillStyle = 'magenta';
+            obstacles.forEach(obstacle => ctx.fillRect(obstacle.x, obstacle.y, 20, 20));
+        }
+
+        function changeDirection(event) {
+            const keyPressed = event.key;
+            const direction = snake.direction;
+            if (keyPressed === 'ArrowUp' && direction !== 'ArrowDown') snake.direction = 'ArrowUp';
+            if (keyPressed === 'ArrowDown' && direction !== 'ArrowUp') snake.direction = 'ArrowDown';
+            if (keyPressed === 'ArrowLeft' && direction !== 'ArrowRight') snake.direction = 'ArrowLeft';
+            if (keyPressed === 'ArrowRight' && direction !== 'ArrowLeft') snake.direction = 'ArrowRight';
+        }
+
+        function addFood() {
+            const x = Math.floor(Math.random() * canvas.width / 20) * 20;
+            const y = Math.floor(Math.random() * canvas.height / 20) * 20;
+            food.push({x, y});
+        }
+
+        function addObstacle() {
+            const x = Math.floor(Math.random() * canvas.width / 20) * 20;
+            const y = Math.floor(Math.random() * canvas.height / 20) * 20;
+            obstacles.push({x, y});
+        }
+
+        function endGame() {
+            clearInterval(interval);
+            clearInterval(foodInterval);
+            clearInterval(obstacleInterval);
+            document.removeEventListener('keydown', changeDirection);
+            finalScoreEl.textContent = score;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function submitScore() {
+            const playerName = document.getElementById('player-name').value;
+            if (playerName) {
+                leaderboard.push({name: playerName, score});
+                leaderboard.sort((a, b) => b.score - a.score);
+                localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+                updateLeaderboard();
+                startGame();
+            }
+        }
+
+        function updateLeaderboard() {
+            leaderboardList.innerHTML = '';
+            leaderboard.forEach(entry => {
+                const li = document.createElement('li');
+                li.textContent = `${entry.name}: ${entry.score}`;
+                leaderboardList.appendChild(li);
+            });
+        }
+
+        updateLeaderboard();
+    </script>
+</body>
+</html>

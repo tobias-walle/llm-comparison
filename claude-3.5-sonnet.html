@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            filter: drop-shadow(0 0 10px rgba(0, 255, 0, 0.5)) contrast(1.2);
+        }
+        #menu, #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+        }
+        button {
+            background: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        input {
+            padding: 10px;
+            margin: 10px 0;
+            width: 200px;
+        }
+        #leaderboard {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="menu">
+        <h1>Snake Game</h1>
+        <button onclick="startGame()">Start Game</button>
+    </div>
+    <div id="gameOver" style="display: none;">
+        <h2>Game Over</h2>
+        <p>Your score: <span id="finalScore"></span></p>
+        <input type="text" id="playerName" placeholder="Enter your name">
+        <button onclick="submitScore()">Submit Score</button>
+    </div>
+    <div id="leaderboard"></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const menu = document.getElementById('menu');
+        const gameOverScreen = document.getElementById('gameOver');
+        const leaderboardDiv = document.getElementById('leaderboard');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let snake, food, obstacles, direction, gameLoop, score;
+        const cellSize = 20;
+        const initialSpeed = 150;
+        let speed = initialSpeed;
+
+        const leaderboard = JSON.parse(localStorage.getItem('snakeLeaderboard')) || [];
+
+        function startGame() {
+            menu.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            snake = [{x: 10, y: 10}];
+            food = [];
+            obstacles = [];
+            direction = 'right';
+            score = 0;
+            speed = initialSpeed;
+
+            document.addEventListener('keydown', changeDirection);
+            spawnFood();
+            gameLoop = setInterval(update, speed);
+            setInterval(spawnFood, 1000);
+            setInterval(spawnObstacle, 3000);
+        }
+
+        function update() {
+            const head = {x: snake[0].x, y: snake[0].y};
+
+            switch(direction) {
+                case 'up': head.y--; break;
+                case 'down': head.y++; break;
+                case 'left': head.x--; break;
+                case 'right': head.x++; break;
+            }
+
+            if (head.x < 0) head.x = Math.floor(canvas.width / cellSize) - 1;
+            if (head.x > Math.floor(canvas.width / cellSize) - 1) head.x = 0;
+            if (head.y < 0) head.y = Math.floor(canvas.height / cellSize) - 1;
+            if (head.y > Math.floor(canvas.height / cellSize) - 1) head.y = 0;
+
+            if (collision(head, obstacles) || collision(head, snake.slice(1))) {
+                gameOver();
+                return;
+            }
+
+            snake.unshift(head);
+
+            const foodEaten = food.findIndex(f => f.x === head.x && f.y === head.y);
+            if (foodEaten !== -1) {
+                food.splice(foodEaten, 1);
+                score++;
+                speed = Math.max(50, initialSpeed - score * 2);
+                clearInterval(gameLoop);
+                gameLoop = setInterval(update, speed);
+            } else {
+                snake.pop();
+            }
+
+            draw();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#00f';
+            snake.forEach(segment => {
+                ctx.fillRect(segment.x * cellSize, segment.y * cellSize, cellSize - 1, cellSize - 1);
+            });
+
+            ctx.fillStyle = '#0f0';
+            food.forEach(f => {
+                ctx.beginPath();
+                ctx.arc((f.x * cellSize) + cellSize/2, (f.y * cellSize) + cellSize/2, cellSize/2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.fillStyle = '#f0f';
+            obstacles.forEach(o => {
+                ctx.fillRect(o.x * cellSize, o.y * cellSize, cellSize - 1, cellSize - 1);
+            });
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+        }
+
+        function changeDirection(event) {
+            const key = event.key;
+            if (key === 'ArrowUp' && direction !== 'down') direction = 'up';
+            if (key === 'ArrowDown' && direction !== 'up') direction = 'down';
+            if (key === 'ArrowLeft' && direction !== 'right') direction = 'left';
+            if (key === 'ArrowRight' && direction !== 'left') direction = 'right';
+        }
+
+        function spawnFood() {
+            if (food.length < 5) {
+                const x = Math.floor(Math.random() * (canvas.width / cellSize));
+                const y = Math.floor(Math.random() * (canvas.height / cellSize));
+                if (!collision({x, y}, snake) && !collision({x, y}, obstacles)) {
+                    food.push({x, y});
+                }
+            }
+        }
+
+        function spawnObstacle() {
+            const x = Math.floor(Math.random() * (canvas.width / cellSize));
+            const y = Math.floor(Math.random() * (canvas.height / cellSize));
+            if (!collision({x, y}, snake) && !collision({x, y}, food) && !collision({x, y}, obstacles)) {
+                obstacles.push({x, y});
+            }
+        }
+
+        function collision(pos, arr) {
+            return arr.some(segment => segment.x === pos.x && segment.y === pos.y);
+        }
+
+        function gameOver() {
+            clearInterval(gameLoop);
+            document.removeEventListener('keydown', changeDirection);
+            gameOverScreen.style.display = 'block';
+            document.getElementById('finalScore').textContent = score;
+        }
+
+        function submitScore() {
+            const playerName = document.getElementById('playerName').value;
+            if (playerName) {
+                leaderboard.push({name: playerName, score: score});
+                leaderboard.sort((a, b) => b.score - a.score);
+                leaderboard.splice(10); // Keep only top 10 scores
+                localStorage.setItem('snakeLeaderboard', JSON.stringify(leaderboard));
+                updateLeaderboard();
+                gameOverScreen.style.display = 'none';
+                menu.style.display = 'block';
+            }
+        }
+
+        function updateLeaderboard() {
+            leaderboardDiv.innerHTML = '<h3>Leaderboard</h3>';
+            leaderboard.forEach((entry, index) => {
+                leaderboardDiv.innerHTML += `<p>${index + 1}. ${entry.name}: ${entry.score}</p>`;
+            });
+        }
+
+        updateLeaderboard();
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

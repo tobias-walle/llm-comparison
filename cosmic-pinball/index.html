@@ -11,7 +11,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             background-color: #000;
             font-family: 'Orbitron', sans-serif;
             overflow: hidden;
@@ -19,6 +19,8 @@
         #gameCanvas {
             border: 2px solid #fff;
             box-shadow: 0 0 20px #0ff;
+            max-width: 100%;
+            max-height: 100vh;
         }
         #gameInfo {
             position: absolute;
@@ -31,7 +33,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <canvas id="gameCanvas"></canvas>
     <div id="gameInfo">
         <div>Level: <span id="level">1</span></div>
         <div>Score: <span id="score">0</span></div>
@@ -52,11 +54,12 @@
         let gameLoop;
         let leftPressed = false;
         let rightPressed = false;
+        let touchX = null;
 
         // Game objects
         const ball = {
-            x: 400,
-            y: 300,
+            x: 0,
+            y: 0,
             radius: 8,
             dx: 0,
             dy: 0,
@@ -67,18 +70,47 @@
         const paddle = {
             width: 100,
             height: 10,
-            x: 350,
-            y: 550,
+            x: 0,
+            y: 0,
             speed: 8,
             color: '#ff00ff'
         };
 
         let obstacles = [];
         let particles = [];
+        let stars = [];
+
+        // Responsive canvas setup
+        function setupCanvas() {
+            const aspectRatio = 4 / 3;
+            const maxWidth = Math.min(800, window.innerWidth - 20);
+            const maxHeight = Math.min(600, window.innerHeight - 20);
+
+            if (maxWidth / aspectRatio <= maxHeight) {
+                canvas.width = maxWidth;
+                canvas.height = maxWidth / aspectRatio;
+            } else {
+                canvas.height = maxHeight;
+                canvas.width = maxHeight * aspectRatio;
+            }
+
+            // Adjust game objects based on canvas size
+            ball.radius = canvas.width * 0.01;
+            paddle.width = canvas.width * 0.125;
+            paddle.height = canvas.height * 0.0167;
+            paddle.y = canvas.height - paddle.height - 10;
+
+            // Generate stars
+            generateStars();
+        }
 
         // Event listeners
         document.addEventListener('keydown', keyDownHandler);
         document.addEventListener('keyup', keyUpHandler);
+        canvas.addEventListener('touchstart', touchStartHandler);
+        canvas.addEventListener('touchmove', touchMoveHandler);
+        canvas.addEventListener('touchend', touchEndHandler);
+        window.addEventListener('resize', debounce(setupCanvas, 250));
 
         function keyDownHandler(e) {
             if (e.key === 'ArrowLeft') leftPressed = true;
@@ -91,7 +123,36 @@
             if (e.key === 'ArrowRight') rightPressed = false;
         }
 
+        function touchStartHandler(e) {
+            e.preventDefault();
+            touchX = e.touches[0].clientX - canvas.offsetLeft;
+            if (!gameLoop) startGame();
+        }
+
+        function touchMoveHandler(e) {
+            e.preventDefault();
+            touchX = e.touches[0].clientX - canvas.offsetLeft;
+        }
+
+        function touchEndHandler(e) {
+            e.preventDefault();
+            touchX = null;
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
         function startGame() {
+            setupCanvas();
             resetBall();
             level = 1;
             score = 0;
@@ -102,10 +163,10 @@
         }
 
         function resetBall() {
-            ball.x = 400;
-            ball.y = 300;
-            ball.dx = (Math.random() > 0.5 ? 1 : -1) * ball.baseSpeed;
-            ball.dy = -ball.baseSpeed;
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.dx = (Math.random() > 0.5 ? 1 : -1) * ball.baseSpeed * (canvas.width / 800);
+            ball.dy = -ball.baseSpeed * (canvas.height / 600);
         }
 
         function createObstacles() {
@@ -115,8 +176,19 @@
                 obstacles.push({
                     x: Math.random() * (canvas.width - 80) + 40,
                     y: Math.random() * (canvas.height - 200) + 50,
-                    radius: Math.random() * 10 + 20,
+                    radius: Math.random() * (canvas.width * 0.025) + (canvas.width * 0.025),
                     color: `hsl(${Math.random() * 360}, 100%, 50%)`
+                });
+            }
+        }
+
+        function generateStars() {
+            stars = [];
+            for (let i = 0; i < 100; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 2
                 });
             }
         }
@@ -126,8 +198,15 @@
             drawBackground();
             
             // Move paddle
-            if (leftPressed && paddle.x > 0) paddle.x -= paddle.speed;
-            if (rightPressed && paddle.x < canvas.width - paddle.width) paddle.x += paddle.speed;
+            if (leftPressed && paddle.x > 0) paddle.x -= paddle.speed * (canvas.width / 800);
+            if (rightPressed && paddle.x < canvas.width - paddle.width) paddle.x += paddle.speed * (canvas.width / 800);
+            
+            // Touch control
+            if (touchX !== null) {
+                paddle.x = touchX - paddle.width / 2;
+                if (paddle.x < 0) paddle.x = 0;
+                if (paddle.x > canvas.width - paddle.width) paddle.x = canvas.width - paddle.width;
+            }
 
             // Move ball
             ball.x += ball.dx;
@@ -143,7 +222,7 @@
                 ball.x < paddle.x + paddle.width) {
                 ball.dy = -ball.dy;
                 const paddleCenter = paddle.x + paddle.width / 2;
-                ball.dx = (ball.x - paddleCenter) / (paddle.width / 2) * ball.baseSpeed;
+                ball.dx = (ball.x - paddleCenter) / (paddle.width / 2) * ball.baseSpeed * (canvas.width / 800);
                 createParticles(ball.x, ball.y, '#00ffff');
                 score += 10;
             }
@@ -190,7 +269,7 @@
         }
 
         function drawBackground() {
-            const gradient = ctx.createRadialGradient(400, 300, 0, 400, 300, 600);
+            const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.height);
             gradient.addColorStop(0, "#000033");
             gradient.addColorStop(1, "#000011");
             ctx.fillStyle = gradient;
@@ -198,11 +277,11 @@
 
             // Draw stars
             ctx.fillStyle = "#ffffff";
-            for (let i = 0; i < 100; i++) {
+            stars.forEach(star => {
                 ctx.beginPath();
-                ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, Math.PI * 2);
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
                 ctx.fill();
-            }
+            });
         }
 
         function drawBall() {
@@ -271,7 +350,7 @@
 
         function levelUp() {
             level++;
-            ball.baseSpeed += 0.5;
+            ball.baseSpeed += 0.5 * (canvas.width / 800);
             resetBall();
             createObstacles();
         }
@@ -286,20 +365,21 @@
             ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#fff';
-            ctx.font = '40px Orbitron';
-            ctx.fillText('Game Over!', 280, 250);
-            ctx.font = '24px Orbitron';
-            ctx.fillText(`Final Score: ${score}`, 310, 300);
-            ctx.fillText('Press Space to Restart', 260, 350);
+            ctx.font = `${canvas.width * 0.05}px Orbitron`;
+            ctx.fillText('Game Over!', canvas.width * 0.35, canvas.height * 0.4);
+            ctx.font = `${canvas.width * 0.03}px Orbitron`;
+            ctx.fillText(`Final Score: ${score}`, canvas.width * 0.39, canvas.height * 0.5);
+            ctx.fillText('Press Space or Tap to Restart', canvas.width * 0.32, canvas.height * 0.6);
         }
 
         // Initial game state
+        setupCanvas();
         drawBackground();
         ctx.fillStyle = '#fff';
-        ctx.font = '40px Orbitron';
-        ctx.fillText('Neon Nebula: Cosmic Pinball', 120, 250);
-        ctx.font = '24px Orbitron';
-        ctx.fillText('Press Space to Start', 280, 300);
+        ctx.font = `${canvas.width * 0.05}px Orbitron`;
+        ctx.fillText('Neon Nebula: Cosmic Pinball', canvas.width * 0.15, canvas.height * 0.4);
+        ctx.font = `${canvas.width * 0.03}px Orbitron`;
+        ctx.fillText('Press Space or Tap to Start', canvas.width * 0.35, canvas.height * 0.5);
     </script>
 </body>
 </html>

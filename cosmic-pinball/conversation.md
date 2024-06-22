@@ -631,3 +631,7 @@ To play:
 6. Press space to restart after a game over.
 
 This version provides a more engaging and visually appealing experience while maintaining the core gameplay. It introduces progression and replayability, making it more interesting for players to come back and try to beat their high scores or reach higher levels.
+
+# Me
+Please add mobile support by adding touch control and making the canvas responsive. But please make sure it s
+till looks good on desktop. Make the background less hectic by not changing it every frame.
